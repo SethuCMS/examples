@@ -1,0 +1,12 @@
+# Build output and caches
+/dist
+/.angular
+/out-tsc
+
+# Dependencies
+node_modules
+
+# Logs and OS files
+npm-debug.log*
+.DS_Store
+Thumbs.db

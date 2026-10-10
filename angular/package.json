@@ -1,0 +1,31 @@
+{
+  "name": "sethucms-angular-example",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Test UI that exercises the SethuCMS gateway from Angular (standalone components, signals).",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "start:proxy": "ng serve --proxy-config proxy.conf.json",
+    "build": "ng build",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+  },
+  "dependencies": {
+    "@angular/common": "21.2.24",
+    "@angular/compiler": "21.2.24",
+    "@angular/core": "21.2.24",
+    "@angular/forms": "21.2.24",
+    "@angular/platform-browser": "21.2.24",
+    "@angular/router": "21.2.24",
+    "@sethucms/sdk": "file:../../sethucms-sdk-ts",
+    "rxjs": "7.8.2",
+    "tslib": "2.8.1"
+  },
+  "devDependencies": {
+    "@angular/build": "21.2.24",
+    "@angular/cli": "21.2.24",
+    "@angular/compiler-cli": "21.2.24",
+    "prettier": "3.9.9",
+    "typescript": "5.9.3"
+  }
+}

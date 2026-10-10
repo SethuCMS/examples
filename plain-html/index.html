@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SethuCMS gateway smoke test</title>
+    <style>
+      body {
+        font:
+          15px/1.5 system-ui,
+          sans-serif;
+        max-width: 52rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        color: #1b1f24;
+      }
+      label {
+        display: block;
+        margin: 0.6rem 0;
+        font-weight: 600;
+      }
+      input {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.4rem;
+        font: inherit;
+        font-weight: 400;
+      }
+      button {
+        padding: 0.45rem 0.9rem;
+        font: inherit;
+        cursor: pointer;
+        margin-right: 0.4rem;
+      }
+      ul {
+        list-style: none;
+        padding: 0;
+      }
+      li {
+        padding: 0.25rem 0.5rem;
+        border-left: 4px solid #999;
+        margin: 0.25rem 0;
+        background: #f6f8fa;
+      }
+      li.pass {
+        border-color: #1a7f37;
+      }
+      li.fail {
+        border-color: #cf222e;
+      }
+      li.skip {
+        border-color: #9a6700;
+      }
+      li b {
+        display: inline-block;
+        width: 3.2rem;
+      }
+      pre,
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        background: #f6f8fa;
+        padding: 0.6rem;
+        max-height: 18rem;
+        overflow: auto;
+        font:
+          12px/1.4 ui-monospace,
+          monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>SethuCMS gateway smoke test</h1>
+    <label>Gateway URL <input id="base" value="http://127.0.0.1:8080" /></label>
+    <label
+      >Bearer token <input id="token" type="password" autocomplete="off"
+    /></label>
+    <p>
+      <button id="run">Run checks</button>
+      <button id="copy">Copy report</button>
+    </p>
+    <ul id="results"></ul>
+    <h3>Last response (raw JSON)</h3>
+    <pre id="raw">(nothing yet)</pre>
+    <h3>Report</h3>
+    <textarea id="report" rows="8" readonly></textarea>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const lines = []; // plain-text report, one line per check
+
+      // Record one check result in the list and in the report.
+      function record(status, name, detail = '') {
+        const li = document.createElement('li');
+        li.className = status.toLowerCase();
+        li.innerHTML = `<b>${status}</b> `;
+        li.append(`${name}${detail ? ' - ' + detail : ''}`);
+        $('results').append(li);
+        lines.push(`${status} ${name}${detail ? ' - ' + detail : ''}`);
+        $('report').value = lines.join('\n');
+      }
+
+      // One HTTP call. Mirrors the SDK: Bearer header, JSON body,
+      // Idempotency-Key on writes, no cookies. Never throws on HTTP errors.
+      async function call(method, path, { body, token, signal } = {}) {
+        const headers = { Accept: 'application/json' };
+        const t = token === undefined ? $('token').value.trim() : token;
+        if (t) headers.Authorization = `Bearer ${t}`;
+        if (body !== undefined) headers['Content-Type'] = 'application/json';
+        if (method !== 'GET') headers['Idempotency-Key'] = crypto.randomUUID();
+        const res = await fetch(
+          $('base').value.trim().replace(/\/+$/, '') + path,
+          {
+            method,
+            headers,
+            signal,
+            credentials: 'omit',
+            body: body === undefined ? undefined : JSON.stringify(body),
+          },
+        );
+        const text = await res.text();
+        let json;
+        try {
+          json = text ? JSON.parse(text) : undefined;
+        } catch {
+          json = text;
+        }
+        if (json !== undefined)
+          $('raw').textContent = JSON.stringify(json, null, 2);
+        return { status: res.status, ok: res.ok, json };
+      }
+
+      // Run one named check; any thrown error or false result is a FAIL.
+      // The function returns a detail string, or { skip: "reason" }.
+      async function check(name, fn) {
+        try {
+          const out = await fn();
+          if (out && out.skip) record('SKIP', name, out.skip);
+          else record('PASS', name, out || '');
+        } catch (e) {
+          record('FAIL', name, e.message || String(e));
+        }
+      }
+
+      const need = (cond, msg) => {
+        if (!cond) throw new Error(msg);
+      };
+
+      // Build a minimal valid record for a collection from its field list.
+      function sampleRecord(fields, tag) {
+        const rec = {};
+        for (const f of fields) {
+          if (!f.required) continue;
+          if (f.primaryKey) {
+            if (f.type !== 'integer') rec[f.name] = tag;
+            continue;
+          }
+          if (f.type === 'integer' || f.type === 'number') rec[f.name] = 1;
+          else if (f.type === 'boolean') rec[f.name] = false;
+          else if (f.type === 'string' || f.type === 'text') rec[f.name] = tag;
+          else
+            throw new Error(`cannot fill required ${f.type} field "${f.name}"`);
+        }
+        return rec;
+      }
+
+      // Read /v1/events with fetch streaming (EventSource cannot set headers).
+      // Resolves { ready, event } after `ms`, calling onReady once 'ready' arrives.
+      async function listen(ms, onReady) {
+        const ctl = new AbortController();
+        const seen = { ready: false, event: null };
+        const timer = setTimeout(() => ctl.abort(), ms);
+        try {
+          const res = await fetch(
+            $('base').value.trim().replace(/\/+$/, '') + '/v1/events',
+            {
+              headers: {
+                Authorization: `Bearer ${$('token').value.trim()}`,
+                Accept: 'text/event-stream',
+              },
+              credentials: 'omit',
+              signal: ctl.signal,
+            },
+          );
+          need(res.ok, `HTTP ${res.status}`);
+          const reader = res.body.getReader();
+          const dec = new TextDecoder();
+          let buf = '';
+          for (;;) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buf += dec.decode(value, { stream: true });
+            let i;
+            while ((i = buf.indexOf('\n\n')) >= 0) {
+              const block = buf.slice(0, i);
+              buf = buf.slice(i + 2);
+              const m = /^event: (.+)$/m.exec(block);
+              if (!m) continue; // comment / keep-alive
+              if (m[1] === 'ready' && !seen.ready) {
+                seen.ready = true;
+                onReady();
+              } else if (m[1] !== 'ready' && !seen.event) {
+                seen.event = m[1];
+                ctl.abort();
+              }
+            }
+          }
+        } catch (e) {
+          if (e.name !== 'AbortError') throw e;
+        } finally {
+          clearTimeout(timer);
+        }
+        return seen;
+      }
+
+      async function runAll() {
+        $('results').innerHTML = '';
+        lines.length = 0;
+        lines.push(
+          `SethuCMS smoke test ${new Date().toISOString()} gateway=${$('base').value} page=${location.origin}`,
+        );
+        $('run').disabled = true;
+        let conn, coll, scratch;
+
+        await check('GET /v1/health', async () => {
+          const r = await call('GET', '/v1/health', { token: '' });
+          need(
+            r.status === 200 && r.json.status === 'ok',
+            `status ${r.status}`,
+          );
+          return 'ok (CORS allowed for this origin)';
+        });
+        await check('GET /v1/auth/config', async () => {
+          const r = await call('GET', '/v1/auth/config', { token: '' });
+          need(r.status === 200 && r.json.oidc, `status ${r.status}`);
+          return `oidc.enabled=${r.json.oidc.enabled}`;
+        });
+        await check('List connections', async () => {
+          const r = await call('GET', '/v1/connections');
+          need(r.status === 200, `status ${r.status} (token valid?)`);
+          need(r.json.data.length > 0, 'no connections configured');
+          conn = r.json.data[0];
+          return `${r.json.data.length} found; first = ${conn.name} (${conn.adapterType}, ${conn.mode})`;
+        });
+        await check('List collections', async () => {
+          need(conn, 'no connection');
+          const r = await call('GET', `/v1/connections/${conn.id}/collections`);
+          need(
+            r.status === 200 && r.json.data.length > 0,
+            `status ${r.status}, no collections`,
+          );
+          coll = r.json.data;
+          return coll.map((c) => c.name).join(', ');
+        });
+        await check('List records (limit 5)', async () => {
+          need(coll, 'no collection');
+          const r = await call(
+            'GET',
+            `/v1/connections/${conn.id}/collections/${coll[0].name}/records?limit=5`,
+          );
+          need(
+            r.status === 200 && Array.isArray(r.json.data),
+            `status ${r.status}`,
+          );
+          return `${r.json.data.length} record(s) from ${coll[0].name}`;
+        });
+
+        // Pick the first collection whose required fields we can fill in.
+        if (conn && conn.mode === 'read_write' && coll) {
+          for (const c of coll) {
+            try {
+              sampleRecord(c.fields, 'x');
+              scratch = c;
+              break;
+            } catch {
+              /* try next */
+            }
+          }
+        }
+        const rec = () =>
+          `/v1/connections/${conn.id}/collections/${scratch.name}/records`;
+        let id;
+        if (!scratch) {
+          const why = !conn
+            ? 'no connection'
+            : conn.mode !== 'read_write'
+              ? `connection is ${conn.mode}; writes skipped`
+              : 'no collection with fillable required fields';
+          for (const n of [
+            'Create record',
+            'Read record',
+            'Update record',
+            'Delete record',
+          ])
+            record('SKIP', n, why);
+        } else {
+          const tag = `smoke-${Date.now()}`;
+          const textField = scratch.fields.find(
+            (f) => !f.primaryKey && (f.type === 'string' || f.type === 'text'),
+          );
+          await check('Create record', async () => {
+            const r = await call('POST', rec(), {
+              body: sampleRecord(scratch.fields, tag),
+            });
+            need(
+              r.status === 201,
+              `status ${r.status}: ${JSON.stringify(r.json && r.json.error)}`,
+            );
+            id = r.json.data[scratch.fields.find((f) => f.primaryKey).name];
+            return `${scratch.name}/${id}`;
+          });
+          await check('Read record', async () => {
+            need(id !== undefined, 'no created record');
+            const r = await call('GET', `${rec()}/${id}`);
+            need(r.status === 200, `status ${r.status}`);
+            return 'found';
+          });
+          await check('Update record', async () => {
+            need(id !== undefined, 'no created record');
+            need(textField, 'no text field to update');
+            const r = await call('PATCH', `${rec()}/${id}`, {
+              body: { [textField.name]: tag + '-edited' },
+            });
+            need(
+              r.status === 200 &&
+                r.json.data[textField.name] === tag + '-edited',
+              `status ${r.status}`,
+            );
+            return `${textField.name} changed`;
+          });
+          await check('Delete record', async () => {
+            need(id !== undefined, 'no created record');
+            const r = await call('DELETE', `${rec()}/${id}`);
+            need(r.status === 204 || r.status === 200, `status ${r.status}`);
+            const g = await call('GET', `${rec()}/${id}`);
+            need(
+              g.status === 404,
+              `record still readable (status ${g.status})`,
+            );
+            return 'deleted, then 404 on read';
+          });
+        }
+
+        await check('Events stream (/v1/events)', async () => {
+          let wrote = false;
+          const seen = await listen(3000, () => {
+            if (!scratch) return;
+            // Make a write once the stream is open, then clean it up.
+            wrote = true;
+            const tag = `smoke-ev-${Date.now()}`;
+            call('POST', rec(), { body: sampleRecord(scratch.fields, tag) })
+              .then((r) =>
+                call(
+                  'DELETE',
+                  `${rec()}/${r.json.data[scratch.fields.find((f) => f.primaryKey).name]}`,
+                ),
+              )
+              .catch(() => {});
+          });
+          need(seen.ready, "no 'ready' event within 3 s");
+          if (!wrote)
+            return {
+              skip: "stream opened ('ready' received) but no write possible, so no event expected",
+            };
+          need(seen.event, 'stream opened but no event after a write');
+          return `ready, then '${seen.event}' after a write`;
+        });
+        await check('Bad token is rejected', async () => {
+          const r = await call('GET', '/v1/connections', {
+            token: 'adb_definitely-not-a-real-token-000000',
+          });
+          need(r.status === 401, `expected 401, got ${r.status}`);
+          return '401';
+        });
+
+        const failed = lines.filter((l) => l.startsWith('FAIL')).length;
+        lines.push(failed ? `RESULT: ${failed} FAILED` : 'RESULT: ALL PASSED');
+        $('report').value = lines.join('\n');
+        $('run').disabled = false;
+      }
+
+      $('run').onclick = runAll;
+      $('copy').onclick = async () => {
+        try {
+          await navigator.clipboard.writeText($('report').value);
+        } catch {
+          $('report').select();
+          document.execCommand('copy');
+        }
+        $('copy').textContent = 'Copied';
+        setTimeout(() => ($('copy').textContent = 'Copy report'), 1500);
+      };
+    </script>
+  </body>
+</html>

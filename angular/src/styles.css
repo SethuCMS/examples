@@ -1,0 +1,328 @@
+/* Plain CSS for the SethuCMS Angular example. No UI library. */
+:root {
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --text: #1c2330;
+  --muted: #667085;
+  --line: #d9dee7;
+  --accent: #2557d6;
+  --ok: #1a7f43;
+  --bad: #b42318;
+  --warn: #b54708;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-size: 15px;
+  color: var(--text);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+h1 {
+  font-size: 1.2rem;
+  margin: 0;
+}
+h2 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 10px 20px;
+  background: #101828;
+  color: #fff;
+}
+.top nav {
+  display: flex;
+  gap: 4px;
+}
+.top a {
+  color: #cbd5e1;
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+.top a.active {
+  background: #344054;
+  color: #fff;
+}
+
+main {
+  padding: 0 20px 40px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 14px 0;
+}
+.settings {
+  margin: 14px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.pickers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+input,
+select,
+textarea,
+button {
+  font: inherit;
+  color: var(--text);
+}
+input,
+select,
+textarea {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  min-width: 0;
+}
+.settings input {
+  width: 260px;
+}
+input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+}
+button {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+button.danger {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+button.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font-weight: 600;
+  color: inherit;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+.row.between {
+  justify-content: space-between;
+  align-items: center;
+}
+.full {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  gap: 16px;
+}
+@media (max-width: 1000px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.scroll {
+  overflow-x: auto;
+  margin: 10px 0;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+th,
+td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+th {
+  background: #f9fafb;
+}
+tbody tr {
+  cursor: pointer;
+}
+tbody tr:hover,
+tbody tr.selected {
+  background: #eef3ff;
+}
+
+.field {
+  margin: 8px 0;
+}
+.field > span {
+  color: var(--text);
+}
+
+.muted {
+  color: var(--muted);
+}
+.small {
+  font-size: 0.8rem;
+}
+.mono {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+.error {
+  color: var(--bad);
+  margin: 8px 0;
+}
+.ok {
+  color: var(--ok);
+  margin: 8px 0;
+}
+.note {
+  color: var(--warn);
+  margin: 8px 0;
+}
+
+.health {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 7px;
+}
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #98a2b3;
+}
+.health.ok .dot {
+  background: var(--ok);
+}
+.health.down .dot {
+  background: var(--bad);
+}
+.health.checking .dot {
+  background: var(--warn);
+}
+
+.badge,
+.chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 0.8rem;
+  margin-bottom: 7px;
+}
+.badge.warn {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.chip {
+  margin: 0;
+}
+.chip.live {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+.chip.error,
+.chip.off {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.events {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.events li {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+.events time {
+  color: var(--muted);
+}
+
+.steps {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+}
+.steps li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.status {
+  display: inline-block;
+  min-width: 64px;
+  text-align: center;
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #fff;
+  background: #98a2b3;
+}
+.status.pass {
+  background: var(--ok);
+}
+.status.fail {
+  background: var(--bad);
+}
+.status.skip {
+  background: var(--warn);
+}
+.status.running {
+  background: var(--accent);
+}
